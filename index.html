@@ -284,107 +284,88 @@
     </div>
 
     <script>
-        const API_KEY = '9ee1891db57d47d08d7f5001566d4f97';
-        const PROXY = 'https://api.allorigins.win/raw?url=';
-        const today = new Date().toISOString().split('T')[0];
+    // We no longer need the API_KEY or PROXY constants here!
+    const FALLBACK_IMG = 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=800&auto=format&fit=crop';
 
-        // sortBy=popularity to get the most important news
-        const URL = `https://newsapi.org/v2/everything?q=AI%20OR%20"Artificial%20Intelligence"&from=2026-01-25&to=${today}&language=en&sortBy=popularity&apiKey=${API_KEY}`;
+    function warmUpConnection(url) {
+        try {
+            const targetUrl = new URL(url);
+            const origin = targetUrl.origin;
+            if (document.head.querySelector(`link[href="${origin}"]`)) return;
 
-        const FALLBACK_IMG = 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=800&auto=format&fit=crop';
+            const link = document.createElement('link');
+            link.rel = 'dns-prefetch';
+            link.href = origin;
+            document.head.appendChild(link);
 
-        // TURBO: Function to preconnect to the news site on hover
-        function warmUpConnection(url) {
-            try {
-                // Extract hostname (e.g., https://cnn.com)
-                const targetUrl = new URL(url);
-                const origin = targetUrl.origin;
+            const link2 = document.createElement('link');
+            link2.rel = 'preconnect';
+            link2.href = origin;
+            document.head.appendChild(link2);
+        } catch (e) {}
+    }
 
-                // Check if already preconnected
-                if (document.head.querySelector(`link[href="${origin}"]`)) return;
+    async function init() {
+        const container = document.getElementById('feed-container');
+        const loader = document.getElementById('loader');
 
-                // Inject DNS Prefetch link
-                const link = document.createElement('link');
-                link.rel = 'dns-prefetch'; // Resolves IP address
-                link.href = origin;
-                document.head.appendChild(link);
+        try {
+            // This calls the file you created in /api/get-news.js
+            const req = await fetch('/api/get-news');
+            const data = await req.json();
 
-                // Inject Preconnect link
-                const link2 = document.createElement('link');
-                link2.rel = 'preconnect'; // Sets up handshake
-                link2.href = origin;
-                document.head.appendChild(link2);
+            if (data.status !== 'ok') throw new Error(data.message || "API Error");
 
-                console.log(`Warming up connection to: ${origin}`);
-            } catch (e) {
-                // Ignore invalid URLs
+            loader.remove();
+
+            if (!data.articles || data.articles.length === 0) {
+                container.innerHTML += `<p style="text-align:center; color:#ccc;">No news found.</p>`;
+                return;
             }
-        }
 
-        async function init() {
-            const container = document.getElementById('feed-container');
-            const loader = document.getElementById('loader');
+            data.articles.forEach((article, index) => {
+                if (article.title === "[Removed]") return;
 
-            try {
-                const req = await fetch(PROXY + encodeURIComponent(URL));
-                const data = await req.json();
-
-                if (data.status !== 'ok') throw new Error(data.message);
-
-                loader.remove();
-
-                if (data.articles.length === 0) {
-                    container.innerHTML += `<p style="text-align:center; color:#ccc;">No news found.</p>`;
-                    return;
-                }
-
-                data.articles.forEach((article, index) => {
-                    if (article.title === "[Removed]") return;
-
-                    let imgUrl = article.urlToImage || FALLBACK_IMG;
-
-                    const dateObj = new Date(article.publishedAt);
-                    const dateStr = dateObj.toLocaleDateString('en-US', {
-                        month: 'short', day: 'numeric', year: 'numeric'
-                    });
-
-                    const card = document.createElement('a');
-                    card.className = 'card';
-                    card.href = article.url;
-                    card.target = '_blank';
-                    // 'noopener' is safe, 'noreferrer' sometimes slows down referrer passing but is better for privacy
-                    // We keep noopener to ensure the new tab runs in a separate process (preventing UI freeze)
-                    card.rel = 'noopener';
-                    card.style.animationDelay = `${index * 0.1}s`;
-
-                    // Add Turbo-Charge Listener
-                    card.addEventListener('mouseenter', () => warmUpConnection(article.url), { once: true });
-
-                    card.innerHTML = `
-                        <div class="image-wrapper">
-                            <img src="${imgUrl}" class="card-img" alt="News" onerror="this.src='${FALLBACK_IMG}'">
-                        </div>
-                        <div class="content">
-                            <div class="meta-row">
-                                <span class="source-tag">${article.source.name}</span>
-                                <span class="date-tag">${dateStr}</span>
-                            </div>
-                            <h2>${article.title}</h2>
-                            <p>${article.description || 'Click to read full details...'}</p>
-                        </div>
-                    `;
-
-                    container.appendChild(card);
+                let imgUrl = article.urlToImage || FALLBACK_IMG;
+                const dateObj = new Date(article.publishedAt);
+                const dateStr = dateObj.toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric'
                 });
 
-            } catch (error) {
-                loader.style.display = 'none';
-                container.innerHTML += `<p style="text-align:center; color:#e2e8f0;">Unable to load stream.<br><small>${error.message}</small></p>`;
-            }
-        }
+                const card = document.createElement('a');
+                card.className = 'card';
+                card.href = article.url;
+                card.target = '_blank';
+                card.rel = 'noopener';
+                card.style.animationDelay = `${index * 0.1}s`;
 
-        init();
-    </script>
+                card.addEventListener('mouseenter', () => warmUpConnection(article.url), { once: true });
+
+                card.innerHTML = `
+                    <div class="image-wrapper">
+                        <img src="${imgUrl}" class="card-img" alt="News" onerror="this.src='${FALLBACK_IMG}'">
+                    </div>
+                    <div class="content">
+                        <div class="meta-row">
+                            <span class="source-tag">${article.source.name}</span>
+                            <span class="date-tag">${dateStr}</span>
+                        </div>
+                        <h2>${article.title}</h2>
+                        <p>${article.description || 'Click to read full details...'}</p>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+        } catch (error) {
+            if (loader) loader.style.display = 'none';
+            container.innerHTML += `<p style="text-align:center; color:#e2e8f0;">Unable to load stream.<br><small>${error.message}</small></p>`;
+        }
+    }
+
+    init();
+</script>
 </body>
 
 </html>
