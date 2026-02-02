@@ -284,7 +284,6 @@
     </div>
 
     <script>
-    // We no longer need the API_KEY or PROXY constants here!
     const FALLBACK_IMG = 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=800&auto=format&fit=crop';
 
     function warmUpConnection(url) {
@@ -310,7 +309,6 @@
         const loader = document.getElementById('loader');
 
         try {
-            // This calls the file you created in /api/get-news.js
             const req = await fetch('/api/get-news');
             const data = await req.json();
 
